@@ -13,6 +13,8 @@ class MirrorSessionViewSet(NetBoxModelViewSet):
 
 
 class MirrorSourceViewSet(NetBoxModelViewSet):
-    queryset = models.MirrorSource.objects.select_related("session", "interface__device").prefetch_related("tags")
+    queryset = models.MirrorSource.objects.select_related("session__device", "interface__device").prefetch_related(
+        "tags"
+    )
     serializer_class = MirrorSourceSerializer
     filterset_class = filtersets.MirrorSourceFilterSet

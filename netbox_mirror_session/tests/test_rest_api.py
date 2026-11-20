@@ -1,13 +1,17 @@
 from datetime import timedelta
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from ipam.models import VRF, IPAddress
 from utilities.testing import APITestCase
 
-from .data import create_device, create_ip
+from ..models import MirrorSource
+from .data import build_session, create_device, create_interface, create_ip
 
 SESSION_LIST_URL = "plugins-api:netbox_mirror_session-api:mirrorsession-list"
+SOURCE_LIST_URL = "plugins-api:netbox_mirror_session-api:mirrorsource-list"
 
 
 class MirrorSessionRestApiTests(APITestCase):
@@ -38,6 +42,36 @@ class MirrorSessionRestApiTests(APITestCase):
         response = self.post_session(timezone.now() + timedelta(days=200))
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("expires", response.json())
+
+
+class MirrorSourceRestApiTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.leaf = create_device("leaf-01")
+
+    def count_source_list_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse(SOURCE_LIST_URL), **self.header)
+        self.assertEqual(response.status_code, 200, response.content)
+        return len(queries)
+
+    def create_session_with_source(self, name, port_name):
+        session = build_session(self.leaf, name=name)
+        session.save()
+        MirrorSource.objects.create(session=session, interface=create_interface(self.leaf, port_name))
+
+    def test_source_list_query_count_does_not_grow_with_sources(self):
+        self.add_permissions("netbox_mirror_session.view_mirrorsource")
+        self.create_session_with_source("one", "Ethernet1")
+        # The first API call also updates the token's last_used; measure from the second call on.
+        self.count_source_list_queries()
+        queries_for_one = self.count_source_list_queries()
+
+        self.create_session_with_source("two", "Ethernet2")
+        self.create_session_with_source("three", "Ethernet3")
+        queries_for_three = self.count_source_list_queries()
+
+        self.assertEqual(queries_for_three, queries_for_one)
 
 
 class GlobalTableFilterTests(APITestCase):

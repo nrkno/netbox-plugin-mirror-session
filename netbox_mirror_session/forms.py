@@ -25,13 +25,12 @@ RERENDER_FORM_ON_CHANGE = {
 }
 
 
-def vrfs_on_device(device):
-    """Return the VRFs used by the device's interfaces or by IP addresses on them."""
-    return (
-        VRF.objects.filter(Q(interfaces__device=device) | Q(ip_addresses__interface__device=device))
-        .distinct()
-        .order_by("name")
-    )
+def vrfs_on_device(device, keep_vrf_id=None):
+    """Return the VRFs used by the device's interfaces or their IP addresses, plus keep_vrf_id if given."""
+    condition = Q(interfaces__device=device) | Q(ip_addresses__interface__device=device)
+    if keep_vrf_id is not None:
+        condition |= Q(pk=keep_vrf_id)
+    return VRF.objects.filter(condition).distinct().order_by("name")
 
 
 def ip_addresses_on_device(device):
@@ -51,7 +50,10 @@ def selected_object(form, field_name, model):
         return None
     if isinstance(value, model):
         return value
-    return model.objects.filter(pk=value).first()
+    # A malformed ID is reported by the field's own validation.
+    if not str(value).isdigit():
+        return None
+    return model.objects.filter(pk=int(value)).first()
 
 
 class MirrorSessionForm(PrimaryModelForm):
@@ -107,7 +109,11 @@ class MirrorSessionForm(PrimaryModelForm):
                 self.fields[field_name].help_text = "Choose a device first."
         else:
             self.fields["destination_interface"].widget.add_query_param("device_id", device.pk)
-            self.fields["vrf"].queryset = vrfs_on_device(device)
+            # An existing session may use a VRF that is not on the device; keep it selectable when editing.
+            keep_vrf_id = None
+            if self.instance.device_id == device.pk:
+                keep_vrf_id = self.instance.vrf_id
+            self.fields["vrf"].queryset = vrfs_on_device(device, keep_vrf_id)
             self.fields["gre_source"].queryset = ip_addresses_on_device(device)
 
         vrf = selected_object(self, "vrf", VRF)

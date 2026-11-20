@@ -72,6 +72,25 @@ class MirrorSessionFormDeviceTests(TestCase):
 
         self.assertEqual(list(form.fields["vrf"].queryset), [self.media_vrf])
 
+    def test_editing_keeps_a_stored_vrf_that_is_not_on_the_device(self):
+        session = build_session(
+            self.leaf,
+            destination_kind=DestinationKindChoices.GRE,
+            gre_source=self.loopback_address,
+            gre_destination=self.other_address,
+            vrf=self.other_vrf,
+        )
+        session.save()
+
+        form = MirrorSessionForm(instance=session)
+
+        self.assertEqual(list(form.fields["vrf"].queryset), [self.media_vrf, self.other_vrf])
+
+    def test_malformed_device_id_leaves_fields_disabled(self):
+        form = MirrorSessionForm(initial={"device": "abc"})
+
+        self.assertTrue(form.fields["vrf"].disabled)
+
     def test_gre_source_choices_are_addresses_on_the_device(self):
         form = MirrorSessionForm(initial={"device": self.leaf.pk})
 
