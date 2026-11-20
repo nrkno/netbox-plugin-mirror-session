@@ -48,11 +48,7 @@ class MirrorSessionView(generic.ObjectView):
                 actions=[
                     actions.AddObject(
                         "netbox_mirror_session.MirrorSource",
-                        url_params={
-                            "site": lambda ctx: ctx["object"].device.site_id,
-                            "device": lambda ctx: ctx["object"].device_id,
-                            "session": lambda ctx: ctx["object"].pk,
-                        },
+                        url_params={"session": lambda ctx: ctx["object"].pk},
                     ),
                 ],
             ),

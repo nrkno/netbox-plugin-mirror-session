@@ -8,7 +8,7 @@ from django.utils import timezone
 from utilities.testing import TestCase
 
 from ..models import MirrorSource
-from .data import build_session, create_device, create_interface
+from .data import build_session, create_device, create_interface, create_ip
 
 VIEW_SESSIONS = "netbox_mirror_session.view_mirrorsession"
 VIEW_SOURCES = "netbox_mirror_session.view_mirrorsource"
@@ -57,6 +57,17 @@ class MirrorSessionPageTests(TestCase):
         response = self.client.get(reverse("plugins:netbox_mirror_session:mirrorsession_add"))
 
         self.assertEqual(response.status_code, 200)
+
+    def test_session_form_rerender_lists_the_device_addresses(self):
+        self.add_permissions("netbox_mirror_session.add_mirrorsession", "dcim.view_device", "ipam.view_ipaddress")
+        loopback = create_interface(self.leaf, "Loopback0", InterfaceTypeChoices.TYPE_VIRTUAL)
+        create_ip("10.0.0.1/32", loopback)
+        url = reverse("plugins:netbox_mirror_session:mirrorsession_add")
+
+        response = self.client.get(f"{url}?device={self.leaf.pk}", HTTP_HX_REQUEST="true")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "10.0.0.1/32 (Loopback0)")
 
     def test_source_add_page_renders(self):
         self.add_permissions("netbox_mirror_session.add_mirrorsource")
