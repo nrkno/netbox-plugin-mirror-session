@@ -1,0 +1,33 @@
+# Runs the plugin's tests inside the official NetBox image: ./tests/run.sh
+services:
+  netbox:
+    image: netboxcommunity/netbox:${NETBOX_VERSION:-v4.6.5}
+    depends_on: [postgres, valkey]
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >-
+        cp -r /plugin /tmp/plugin && /usr/local/bin/uv pip install --quiet --python /opt/netbox/venv/bin/python /tmp/plugin
+        && cd /opt/netbox/netbox
+        && /opt/netbox/venv/bin/python manage.py makemigrations netbox_mirror_session --check --dry-run
+        && /opt/netbox/venv/bin/python manage.py test netbox_mirror_session --noinput --parallel 1
+    environment:
+      DB_HOST: postgres
+      DB_NAME: netbox
+      DB_USER: netbox
+      DB_PASSWORD: netbox
+      REDIS_HOST: valkey
+      SECRET_KEY: test-secret-key-that-is-at-least-fifty-characters-long-0123456789
+      API_TOKEN_PEPPER_1: test-only-pepper-that-is-at-least-fifty-characters-long-0123456789
+      SKIP_SUPERUSER: "true"
+    volumes:
+      - ..:/plugin:ro
+      - ./plugins.py:/etc/netbox/config/plugins.py:ro
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_USER: netbox
+      POSTGRES_PASSWORD: netbox
+  valkey:
+    image: valkey/valkey:8-alpine

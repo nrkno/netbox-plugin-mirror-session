@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-plugin-mirror-session"
+version = "0.1.0"
+description = "Model port mirror sessions (SPAN, GRE mirror, CPU) in NetBox, with a mandatory expiry"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+include = ["netbox_mirror_session*"]
+
+[tool.setuptools.package-data]
+netbox_mirror_session = ["templates/**"]
+
+[tool.ruff]
+line-length = 120
+exclude = ["netbox_mirror_session/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "PLW"]

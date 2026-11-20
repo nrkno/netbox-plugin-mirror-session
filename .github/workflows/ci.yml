@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.17.4"
+          args: check
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.17.4"
+          args: format --check
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        netbox: ["v4.6.5"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests in the NetBox image
+        env:
+          NETBOX_VERSION: ${{ matrix.netbox }}
+        run: ./tests/run.sh

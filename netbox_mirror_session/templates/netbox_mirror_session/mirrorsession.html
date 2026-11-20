@@ -1,0 +1,37 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+
+{% block alerts %}
+  {% if show_expired_but_active %}
+    <div class="alert alert-danger" role="alert">
+      <i class="mdi mdi-clock-alert-outline"></i>
+      This session expired {{ object.expires|isodatetime }} but is still active. Config automation no longer
+      generates it, and the expiry job will set it to planned. It stays on {{ object.device }} until the next config push.
+    </div>
+  {% endif %}
+  {% if show_high_speed_warning %}
+    <div class="alert alert-danger" role="alert">
+      <h4 class="alert-title"><i class="mdi mdi-alert-octagon"></i> Long-running mirror of high-speed interfaces</h4>
+      This session expires {{ object.expires|isodatetime }}, more than {{ long_expiry_days }} days from now, and mirrors
+      interfaces at {{ high_speed }} or faster, or with unknown speed:
+      <ul class="mb-0">
+        {% for source in flagged_sources %}
+          <li>{{ source.interface|linkify }} ({{ source.speed_kbps|humanize_speed|placeholder }}, {{ source.interface.get_type_display }})</li>
+        {% endfor %}
+        {% if hidden_flagged_source_count %}
+          <li>{{ hidden_flagged_source_count }} more that you do not have permission to view</li>
+        {% endif %}
+      </ul>
+      A long mirror at this speed can overload the destination port or, with GRE, the network carrying it.
+      Shorten the expiry unless you are sure.
+    </div>
+  {% endif %}
+  {% if show_long_warning %}
+    <div class="alert alert-warning" role="alert">
+      <h4 class="alert-title"><i class="mdi mdi-alert"></i> Long-running mirror session</h4>
+      This session expires {{ object.expires|isodatetime }}, more than {{ long_expiry_days }} days from now.
+      Mirror sessions should be short-lived; shorten the expiry unless you need it.
+    </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock alerts %}
