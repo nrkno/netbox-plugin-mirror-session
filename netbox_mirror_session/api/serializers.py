@@ -41,7 +41,7 @@ class MirrorSessionSerializer(PrimaryModelSerializer):
             "created",
             "last_updated",
         )
-        brief_fields = ("id", "url", "display", "name", "description")
+        brief_fields = ("id", "url", "display", "device", "name", "description")
 
 
 class MirrorSourceSerializer(NetBoxModelSerializer):

@@ -1,5 +1,7 @@
 from dcim.models import Device, Interface, Site
 from django import forms
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from ipam.models import VRF, IPAddress
 from netbox.forms import (
     NetBoxModelFilterSetForm,
@@ -9,11 +11,48 @@ from netbox.forms import (
 )
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField
 from utilities.forms.rendering import FieldSet
+from utilities.forms.utils import get_field_value
 from utilities.forms.widgets import DateTimePicker
 
 from .choices import DestinationKindChoices, MirrorDirectionChoices, MirrorSessionStatusChoices
 from .constants import LONG_EXPIRY, MAX_EXPIRY
 from .models import MirrorSession, MirrorSource
+
+# Mimics NetBox's HTMXSelect: re-render the form when this field changes, so dependent lists can follow it.
+RERENDER_FORM_ON_CHANGE = {
+    "hx-get": ".",
+    "hx-include": "#form_fields",
+    "hx-target": "#form_fields",
+}
+
+
+def vrfs_on_device(device, keep_vrf_id=None):
+    """Return the VRFs used by the device's interfaces or their IP addresses, plus keep_vrf_id if given."""
+    condition = Q(interfaces__device=device) | Q(ip_addresses__interface__device=device)
+    if keep_vrf_id is not None:
+        condition |= Q(pk=keep_vrf_id)
+    return VRF.objects.filter(condition).distinct().order_by("name")
+
+
+def ip_addresses_on_device(device):
+    """Return the IP addresses assigned to the device's interfaces."""
+    return IPAddress.objects.filter(interface__device=device).prefetch_related("assigned_object").order_by("address")
+
+
+class IPAddressWithInterfaceField(forms.ModelChoiceField):
+    def label_from_instance(self, address):
+        return f"{address.address} ({address.assigned_object.name})"
+
+
+def selected_object(form, field_name):
+    """Return the object currently chosen in a form field, or None if nothing valid is chosen yet."""
+    field = form.fields[field_name]
+    value = get_field_value(form, field_name)
+    try:
+        return field.to_python(value)
+    except ValidationError:
+        # The field reports the bad value itself when the form is validated.
+        return None
 
 
 class MirrorSessionForm(PrimaryModelForm):
@@ -29,34 +68,58 @@ class MirrorSessionForm(PrimaryModelForm):
     destination_interface = DynamicModelChoiceField(
         queryset=Interface.objects.all(),
         required=False,
-        query_params={"device_id": "$device"},
         help_text="For a local interface destination.",
     )
-    gre_source = DynamicModelChoiceField(
-        queryset=IPAddress.objects.all(),
+    vrf = forms.ModelChoiceField(
+        queryset=VRF.objects.none(),
         required=False,
-        query_params={"device_id": "$device"},
+        label="VRF",
+        help_text="A VRF on this device. Leave empty for the global table.",
+    )
+    gre_source = IPAddressWithInterfaceField(
+        queryset=IPAddress.objects.none(),
+        required=False,
         label="GRE source",
-        help_text="An address on this device, for a GRE tunnel destination.",
+        help_text="An address on this device.",
     )
     gre_destination = DynamicModelChoiceField(
         queryset=IPAddress.objects.all(),
         required=False,
         label="GRE destination",
-        help_text="The capture host's address, for a GRE tunnel destination.",
-    )
-    vrf = DynamicModelChoiceField(
-        queryset=VRF.objects.all(),
-        required=False,
-        label="VRF",
+        help_text="The capture host's address, in the chosen VRF.",
     )
 
     fieldsets = (
         FieldSet("site", "device", "name", "status", "expires", "description", "tags", name="Mirror Session"),
         FieldSet("destination_kind", "destination_interface", name="Destination"),
-        FieldSet("gre_source", "gre_destination", "vrf", name="GRE Tunnel"),
+        FieldSet("vrf", "gre_source", "gre_destination", name="GRE Tunnel"),
         FieldSet("truncate", name="Options"),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["device"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
+        self.fields["vrf"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
+
+        device = selected_object(self, "device")
+        if device is None:
+            for field_name in ("destination_interface", "vrf", "gre_source"):
+                self.fields[field_name].disabled = True
+                self.fields[field_name].help_text = "Choose a device first."
+        else:
+            self.fields["destination_interface"].widget.add_query_param("device_id", device.pk)
+            # An existing session may use a VRF that is not on the device; keep it selectable when editing.
+            keep_vrf_id = None
+            if self.instance.device_id == device.pk:
+                keep_vrf_id = self.instance.vrf_id
+            self.fields["vrf"].queryset = vrfs_on_device(device, keep_vrf_id)
+            self.fields["gre_source"].queryset = ip_addresses_on_device(device)
+
+        vrf = selected_object(self, "vrf")
+        if vrf is None:
+            self.fields["gre_destination"].widget.add_query_param("vrf_id", "null")
+        else:
+            self.fields["gre_destination"].widget.add_query_param("vrf_id", vrf.pk)
 
     class Meta:
         model = MirrorSession
@@ -117,25 +180,16 @@ class MirrorSessionFilterForm(PrimaryModelFilterSetForm):
 
 
 class MirrorSourceForm(NetBoxModelForm):
-    # Site and device are not saved: they narrow the session and interface lists to one device.
-    # The session page's Add button prefills both.
-    site = DynamicModelChoiceField(
-        queryset=Site.objects.all(),
-    )
-    device = DynamicModelChoiceField(
-        queryset=Device.objects.all(),
-        query_params={"site_id": "$site"},
-    )
     session = DynamicModelChoiceField(
         queryset=MirrorSession.objects.all(),
-        query_params={"device_id": "$device"},
+        context={"parent": "device"},
     )
     interface = DynamicModelChoiceField(
         queryset=Interface.objects.all(),
-        query_params={"device_id": "$device"},
+        help_text="Interfaces on the session's device, except its destination.",
     )
 
-    fieldsets = (FieldSet("site", "device", "session", "interface", "direction", "tags", name="Mirror Source"),)
+    fieldsets = (FieldSet("session", "interface", "direction", "tags", name="Mirror Source"),)
 
     class Meta:
         model = MirrorSource
@@ -143,10 +197,17 @@ class MirrorSourceForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.pk is not None:
-            device = self.instance.session.device
-            self.initial["device"] = device.pk
-            self.initial["site"] = device.site_id
+        self.fields["session"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
+
+        session = selected_object(self, "session")
+        if session is None:
+            self.fields["interface"].disabled = True
+            self.fields["interface"].help_text = "Choose a session first."
+            return
+
+        self.fields["interface"].widget.add_query_param("device_id", session.device_id)
+        if session.destination_interface_id is not None:
+            self.fields["interface"].widget.add_query_param("id__n", session.destination_interface_id)
 
 
 class MirrorSourceFilterForm(NetBoxModelFilterSetForm):

@@ -24,6 +24,9 @@ ruff check . && ruff format --check .
 - Commits follow Conventional Commits (`feat:`, `fix:`, `chore:` …): commitlint runs on push, and
   semantic-release tags releases from `main`.
 - Never commit to `main`; every change goes through a branch and a PR.
+- Form lists that depend on another field (device → interfaces/VRFs/addresses, session → interfaces) re-render
+  the form on change (`RERENDER_FORM_ON_CHANGE` in `forms.py`) and get fixed filters in `__init__`. NetBox
+  narrows every dropdown to the user's view permissions, so view tests must grant those.
 - Business rules (expiry limit, warning thresholds) are constants in one place, `constants.py`. UI text that
   mentions them is built from those constants.
 - Detail pages use NetBox's declarative layouts (`netbox.ui`, panels in `ui/panels.py`). The only template is
