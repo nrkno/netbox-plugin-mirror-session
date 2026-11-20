@@ -91,6 +91,22 @@ class MirrorSessionFormDeviceTests(TestCase):
 
         self.assertTrue(form.fields["vrf"].disabled)
 
+    def test_non_ascii_digit_device_id_leaves_fields_disabled(self):
+        form = MirrorSessionForm(initial={"device": "\u00b2"})
+
+        self.assertTrue(form.fields["vrf"].disabled)
+
+    def test_out_of_range_device_id_leaves_fields_disabled(self):
+        form = MirrorSessionForm(initial={"device": "99999999999999999999"})
+
+        self.assertTrue(form.fields["vrf"].disabled)
+
+    def test_malformed_device_id_is_a_field_error(self):
+        form = MirrorSessionForm(data={"site": self.leaf.site_id, "device": "abc"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("device", form.errors)
+
     def test_gre_source_choices_are_addresses_on_the_device(self):
         form = MirrorSessionForm(initial={"device": self.leaf.pk})
 

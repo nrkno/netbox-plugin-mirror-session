@@ -1,5 +1,6 @@
 from dcim.models import Device, Interface, Site
 from django import forms
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from ipam.models import VRF, IPAddress
 from netbox.forms import (
@@ -43,17 +44,15 @@ class IPAddressWithInterfaceField(forms.ModelChoiceField):
         return f"{address.address} ({address.assigned_object.name})"
 
 
-def selected_object(form, field_name, model):
-    """Return the object currently chosen in a form field, or None if nothing is chosen yet."""
+def selected_object(form, field_name):
+    """Return the object currently chosen in a form field, or None if nothing valid is chosen yet."""
+    field = form.fields[field_name]
     value = get_field_value(form, field_name)
-    if value in (None, ""):
+    try:
+        return field.to_python(value)
+    except ValidationError:
+        # The field reports the bad value itself when the form is validated.
         return None
-    if isinstance(value, model):
-        return value
-    # A malformed ID is reported by the field's own validation.
-    if not str(value).isdigit():
-        return None
-    return model.objects.filter(pk=int(value)).first()
 
 
 class MirrorSessionForm(PrimaryModelForm):
@@ -102,7 +101,7 @@ class MirrorSessionForm(PrimaryModelForm):
         self.fields["device"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
         self.fields["vrf"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
 
-        device = selected_object(self, "device", Device)
+        device = selected_object(self, "device")
         if device is None:
             for field_name in ("destination_interface", "vrf", "gre_source"):
                 self.fields[field_name].disabled = True
@@ -116,7 +115,7 @@ class MirrorSessionForm(PrimaryModelForm):
             self.fields["vrf"].queryset = vrfs_on_device(device, keep_vrf_id)
             self.fields["gre_source"].queryset = ip_addresses_on_device(device)
 
-        vrf = selected_object(self, "vrf", VRF)
+        vrf = selected_object(self, "vrf")
         if vrf is None:
             self.fields["gre_destination"].widget.add_query_param("vrf_id", "null")
         else:
@@ -200,7 +199,7 @@ class MirrorSourceForm(NetBoxModelForm):
         super().__init__(*args, **kwargs)
         self.fields["session"].widget.attrs.update(RERENDER_FORM_ON_CHANGE)
 
-        session = selected_object(self, "session", MirrorSession)
+        session = selected_object(self, "session")
         if session is None:
             self.fields["interface"].disabled = True
             self.fields["interface"].help_text = "Choose a session first."
