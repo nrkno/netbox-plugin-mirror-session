@@ -12,7 +12,6 @@ from netbox.forms import (
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField
 from utilities.forms.rendering import FieldSet
 from utilities.forms.utils import get_field_value
-from utilities.forms.widgets import DateTimePicker
 
 from .choices import DestinationKindChoices, MirrorDirectionChoices, MirrorSessionStatusChoices
 from .constants import LONG_EXPIRY, MAX_EXPIRY
@@ -140,7 +139,8 @@ class MirrorSessionForm(PrimaryModelForm):
             "tags",
         )
         widgets = {
-            "expires": DateTimePicker(),
+            # The browser's own picker: NetBox does not re-create its date picker after the form re-renders.
+            "expires": forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         }
         help_texts = {
             "expires": (
