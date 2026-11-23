@@ -1,14 +1,17 @@
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = ["setuptools >= 77.0.3", "setuptools-scm >= 8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "netbox-plugin-mirror-session"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Model port mirror sessions (SPAN, GRE mirror, CPU) in NetBox, with a mandatory expiry"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
+
+# The version comes from the git tag that semantic-release creates.
+[tool.setuptools_scm]
 
 [tool.setuptools.packages.find]
 include = ["netbox_mirror_session*"]

@@ -43,6 +43,32 @@ class MirrorSessionFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
 
 
+class MirrorSessionFormExpiryTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.leaf = create_device("leaf-01")
+
+    def test_expires_uses_the_browser_date_time_input(self):
+        form = MirrorSessionForm()
+
+        self.assertIn('type="datetime-local"', str(form["expires"]))
+
+    def test_browser_date_time_value_is_accepted(self):
+        expires = (timezone.now() + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+        form = MirrorSessionForm(
+            data={
+                "site": self.leaf.site_id,
+                "device": self.leaf.pk,
+                "name": "capture",
+                "status": "active",
+                "expires": expires,
+                "destination_kind": "cpu",
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+
 class MirrorSessionFormDeviceTests(TestCase):
     @classmethod
     def setUpTestData(cls):

@@ -14,6 +14,7 @@ ruff check . && ruff format --check .
 
 ## Rules
 
+- The plugin version is the git tag (setuptools-scm); never write a version number in `pyproject.toml`.
 - Supported NetBox range lives in `netbox_mirror_session/__init__.py` (`min_version`/`max_version`) and
   `COMPATIBILITY.md`. Change both together.
 - After a model change, run `./tests/makemigrations.sh` and commit the migration; `tests/run.sh` fails on
