@@ -20,6 +20,8 @@ services:
       SECRET_KEY: test-secret-key-that-is-at-least-fifty-characters-long-0123456789
       API_TOKEN_PEPPER_1: test-only-pepper-that-is-at-least-fifty-characters-long-0123456789
       SKIP_SUPERUSER: "true"
+      # The NetBox image has no git, so setuptools-scm cannot read the tag here; the version is irrelevant to tests.
+      SETUPTOOLS_SCM_PRETEND_VERSION_FOR_NETBOX_PLUGIN_MIRROR_SESSION: "0.0.0"
     volumes:
       - ..:/plugin:ro
       - ./plugins.py:/etc/netbox/config/plugins.py:ro
